@@ -1,0 +1,60 @@
+//Backend (main.mo):
+import Principal "mo:base/Principal";
+import Ledger "mo:icrc1/ledger";
+import Archive "mo:icrc1/archive";
+import T "mo:icrc1/types";
+
+actor ExercicioCoin {
+  let TOKEN_SYMBOL : Text = "EXTC";
+  let TOKEN_NAME : Text = "Exercicio Coin";
+  let TRANSFER_FEE : Nat = 10_000;
+  let PRE_MINTED_TOKENS : Nat = 100_000_000_000;
+  let NUM_OF_BLOCK_TO_ARCHIVE : Nat = 1000;
+  let TRIGGER_THRESHOLD : Nat = 2000;
+
+  let MINTER : Principal = Principal.fromText("aaaaa-aa"); 
+  let BALANCE_ACCOUNT_ID : Principal = Principal.fromText("aaaaa-aa"); 
+  let ARCHIVE_CONTROLLER : Principal = Principal.fromText("aaaaa-aa");
+
+  public shared({ caller }) func init_ledger() : async () {
+    let ledger_args : T.InitArgs = {
+      token_symbol = TOKEN_SYMBOL;
+      token_name = TOKEN_NAME;
+      transfer_fee = TRANSFER_FEE;
+      minting_account = { owner = MINTER; subaccount = null };
+      initial_balances = [({ owner = BALANCE_ACCOUNT_ID; subaccount = null }, PRE_MINTED_TOKENS)];
+      archive_options = {
+        num_blocks_to_archive = NUM_OF_BLOCK_TO_ARCHIVE;
+        trigger_threshold = TRIGGER_THRESHOLD;
+        controller = ARCHIVE_CONTROLLER;
+      };
+    };
+    await Ledger.init(ledger_args);
+  };
+
+  public query func icrc1_metadata() : async [T.MetaDatum] {
+    await Ledger.icrc1_metadata();
+  };
+
+  public query func icrc1_total_supply() : async Nat {
+    await Ledger.icrc1_total_supply();
+  };
+
+  public shared({ caller }) func icrc1_transfer(args : T.TransferArgs) : async T.TransferResult {
+    await Ledger.icrc1_transfer(args);
+  };
+};
+
+//Frontend (App.jsx):
+import React from 'react';
+
+function App() {
+  return (
+    <div>
+      <h1>{TOKEN_NAME} ({TOKEN_SYMBOL})</h1>
+      <p>Total Supply: {PRE_MINTED_TOKENS}</p>
+    </div>
+  );
+}
+
+export default App;
