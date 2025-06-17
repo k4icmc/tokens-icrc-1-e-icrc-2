@@ -1,0 +1,145 @@
+//Backend (main.mo)
+import Principal "mo:base/Principal";
+import HashMap "mo:base/HashMap";
+import Ledger "mo:icrc1/ledger";
+import ICRC2 "mo:icrc2/ledger";
+import T "mo:icrc1/types";
+
+actor TokenDApp {
+  // Dados Token (EXTC)
+  let TOKEN_NAME : Text = "Exercicio Coin";
+  let TOKEN_SYMBOL : Text = "EXTC";
+  let TOKEN_FEE : Nat = 10_000;
+  var TOTAL_SUPPLY : Nat = 100_000_000_000;
+  let MINTER : Principal = Principal.fromText("aaaaa-aa"); // Substitua pelo seu Principal
+
+  // pegar metadados do Token
+  public query func getTokenInfo() : async {name: Text; symbol: Text; fee: Nat; supply: Nat; minter: Principal} {
+    {
+      name = TOKEN_NAME;
+      symbol = TOKEN_SYMBOL;
+      fee = TOKEN_FEE;
+      supply = TOTAL_SUPPLY;
+      minter = MINTER;
+    };
+  };
+
+  // transferência (ICRC-2)
+  public shared({ caller }) func transfer(from: Principal, to: Principal, amount: Nat) : async T.TransferResult {
+    let transfer_args : T.TransferArgs = {
+      from_subaccount = null;
+      to = { owner = to; subaccount = null };
+      amount;
+      fee = ?TOKEN_FEE;
+      memo = null;
+      created_at_time = null;
+    };
+    await ICRC2.icrc2_transfer_from(transfer_args);
+  };
+
+  //consultar saldo
+  public query func getBalance(account: Principal) : async Nat {
+    await Ledger.icrc1_balance_of({ owner = account; subaccount = null });
+  };
+};
+
+//Frontend (App.jsx)
+import React, { useState, useEffect } from 'react';
+import { AuthClient } from '@dfinity/auth-client';
+
+function App() {
+  const [tokenInfo, setTokenInfo] = useState(null);
+  const [fromPrincipal, setFromPrincipal] = useState('');
+  const [toPrincipal, setToPrincipal] = useState('');
+  const [amount, setAmount] = useState(0);
+  const [fromBalance, setFromBalance] = useState(0);
+  const [toBalance, setToBalance] = useState(0);
+
+  useEffect(() => {
+    fetchTokenInfo();
+  }, []);
+
+  const fetchTokenInfo = async () => {
+    const info = await window.tokenCanister.getTokenInfo();
+    setTokenInfo(info);
+  };
+
+  const handleLogin = async () => {
+    const authClient = await AuthClient.create();
+    await authClient.login({
+      identityProvider: "https://identity.ic0.app",
+      onSuccess: async () => {
+        const principal = authClient.getIdentity().getPrincipal().toText();
+        setFromPrincipal(principal);
+        updateBalance(principal, setFromBalance);
+      },
+    });
+  };
+
+  const updateBalance = async (principal, setBalance) => {
+    const balance = await window.tokenCanister.getBalance(Principal.fromText(principal));
+    setBalance(balance);
+  };
+
+  const handleTransfer = async () => {
+    if (!fromPrincipal || !toPrincipal || amount <= 0) return;
+    await window.tokenCanister.transfer(
+      Principal.fromText(fromPrincipal),
+      Principal.fromText(toPrincipal),
+      amount * 100000000 // Ajuste para decimals
+    );
+    updateBalance(fromPrincipal, setFromBalance);
+    updateBalance(toPrincipal, setToBalance);
+  };
+
+  return (
+    <div>
+     //Card de Informações do Token 
+      <div className="token-card">
+        <h2>{tokenInfo?.name || 'Loading...'}</h2>
+        <p>Symbol: {tokenInfo?.symbol}</p>
+        <p>Fee: {tokenInfo?.fee}</p>
+        <p>Total Supply: {tokenInfo?.supply}</p>
+        <p>Minter: {tokenInfo?.minter.toText()}</p>
+      </div>
+
+      // Formulário de Transferência 
+      <div className="transfer-form">
+        <h3>Transferência de Tokens</h3>
+        <div>
+          <label>Conta Origem:</label>
+          <input type="text" value={fromPrincipal} readOnly />
+          <button onClick={handleLogin}>Selecionar II</button>
+          <span>Saldo: {fromBalance}</span>
+        </div>
+        <div>
+          <label>Conta Destino:</label>
+          <input 
+            type="text" 
+            value={toPrincipal} 
+            onChange={(e) => {
+              setToPrincipal(e.target.value);
+              updateBalance(e.target.value, setToBalance);
+            }} 
+          />
+          <span>Saldo: {toBalance}</span>
+        </div>
+        <div>
+          <label>Quantidade:</label>
+          <input 
+            type="number" 
+            value={amount} 
+            onChange={(e) => setAmount(Number(e.target.value))} 
+          />
+        </div>
+        <button onClick={handleTransfer}>Aprovar e Transferir</button>
+      </div>
+    </div>
+  );
+}
+
+export default App;
+
+
+//dependencia
+npm install @dfinity/auth-client
