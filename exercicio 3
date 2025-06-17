@@ -1,0 +1,78 @@
+//configuração inicial no terminal
+git clone https://github.com/diogodcmdcm/icpstore.git
+cd icpstore
+npm install
+dfx identity new icpsc_minter
+dfx identity use icpsc_minter
+dfx identity get-principal  # Salve o Principal ID
+"init_arg": "(variant {Init = record {
+  token_symbol = \"icpsc\";
+  token_name = \"ICP Store Coin\";
+  minting_account = record { owner = principal \"SEU_PRINCIPAL_MINTER\"};
+  transfer_fee = 10_000;
+  initial_balances = vec { record { record { owner = principal \"SEU_PRINCIPAL_BALANCES\"}; 100_000_000_000; }};
+  archive_options = record { 
+    controller_id = principal \"SEU_PRINCIPAL_ARCHIVE\";
+    num_blocks_to_archive = 1000;
+    trigger_threshold = 2000;
+  };
+}})"
+
+//frontEnd botão comprar
+import { Plug } from "plug";
+function App() {
+  const [plugConnected, setPlugConnected] = useState(false);
+  const [plugPrincipal, setPlugPrincipal] = useState("");
+  const connectPlug = async () => {
+    const connected = await Plug.requestConnect();
+    if (connected) {
+      setPlugConnected(true);
+      const principal = await Plug.agent.getPrincipal();
+      setPlugPrincipal(principal.toText());
+    }
+  };
+  const buyCourse = async (coursePrice) => {
+    if (!plugConnected) {
+      await connectPlug();
+      return;
+    }
+    const transferArgs = {
+      to: {
+        owner: Principal.fromText("PRINCIPAL_DO_CANISTER_BACKEND"),
+        subaccount: null,
+      },
+      amount: coursePrice * 1e8, 
+      fee: { e8s: 10_000 },
+    };
+    try {
+      const result = await Plug.agent.call({
+        canisterId: "CANISTER_ID_LEDGER",
+        method: "icrc1_transfer",
+        args: [transferArgs],
+      });
+      alert("Compra realizada com sucesso!");
+    } catch (error) {
+      console.error("Erro na transferência:", error);
+    }
+  };
+  return (
+    <div className="course-card">
+      <h3>Front-end com React na ICP</h3>
+      <p>Construa interfaces modernas para DApps usando React na ICP.</p>
+      <p>20 ICPSC</p>
+      <button onClick={() => buyCourse(20)}>Comprar</button>
+    </div>
+  );
+}
+export default App;
+
+
+
+//testa isso no terminal
+dfx start 
+dfx deploy
+dfx canister call icpsc_icrc1_ledger_canister icrc1_transfer '
+  (record {
+    to = record { owner = principal "PRINCIPAL_DA_PLUG" };
+    amount = 1_000_000;
+  })'
